@@ -1,0 +1,921 @@
+---
+title: "R project Final"
+author: "Ajay"
+date: "12/8/2019"
+output: html_document
+#In collaboration in Premkumar Loganathan and Prasun Shrestha
+---
+
+```{r global_options, include=FALSE}
+
+knitr::opts_chunk$set(echo=FALSE, warning=FALSE, message=FALSE)
+
+```
+
+```{r}
+library(tidyverse)
+library(knitr)
+
+options(scipen = 4)
+```
+
+
+
+```{r}
+nlsy <- read_csv("http://www.andrew.cmu.edu/user/achoulde/94842/final_project/nlsy79/nlsy79_income.csv")
+
+# Change column names (mostly) to question name abbreviations
+colnames(nlsy) <- c("VERSION_R25_2012",
+    "CASEID_1979",
+    "FAM-2A_1979",
+    "FAM-POB_1979",
+    "FAM-3_1979",
+    "FAM-3A_1979",
+    "FAM-RES_1979",
+    "FAM-6_1979",
+    "R_REL-1_COL_1979",
+    "SCHOOL-31_1979",
+    "MIL-6_1979",
+    "gender_roles", #WOMAN'S PLACE IS IN THE HOME? 
+    "WOMENS-ROLES_000002_1979",
+    "WOMENS-ROLES_000003_1979",
+    "WOMENS-ROLES_000004_1979",
+    "WOMENS-ROLES_000006_1979",
+    "WOMENS-ROLES_000007_1979",
+    "WOMENS-ROLES_000008_1979",
+    "EXP-OCC_1979",
+    "EXP-9_1979",
+    "race",
+    "gender",
+    "MARSTAT-KEY_1979",
+    "FAMSIZE_1979",
+    "POVSTATUS_1979",
+    "POLICE-1_1980",
+    "POLIC-1C_1980",
+    "POLICE-2_1980",
+    "ALCH-2_1983",
+    "DS-8_1984",
+    "DS-9_1984",
+    "Q13-5_TRUNC_REVISED_1990",
+    "POVSTATUS_1990",
+    "HGCREV90_1990",
+    "jobs.num",
+    "NUMCH90_1990",
+    "AGEYCH90_1990",
+    "DS-12_1998",
+    "DS-13_1998",
+    "INDALL-EMP.01_2000",
+    "CPSOCC80.01_2000",
+    "OCCSP-55I_CODE_2000",
+    "Q2-15B_2000",
+    "Q10-2_2000",
+    "Q13-5_TRUNC_REVISED_2000",
+    "FAMSIZE_2000",
+    "TNFI_TRUNC_2000",
+    "POVSTATUS_2000",
+    "marital_status_2000",
+    "MARSTAT-KEY_2000",
+    "MO1M1B_XRND",
+    "Q2-10B~Y_2012",
+    "industry_2012", # TYPE OF BUSINESS OR INDUSTRY
+    "OCCALL-EMP.01_2012",
+    "OCCSP-55I_CODE_2012",
+    "Q2-15A_2012",
+    "Q12-6_2012",
+    "income",
+    "Q13-5_SR000001_2012",
+    "Q13-5_SR000002_2012",
+    "Q13-18_TRUNC_2012",
+    "Q13-18_SR000001_TRUNC_2012",
+    "FAMSIZE_2012",
+    "REGION_2012",
+    "education_level", #HIGHEST GRADE COMPLETED AS OF MAY 1 SURVEY YEAR
+    "current_residence", #IS R'S CURRENT RESIDENCE URBAN/RURAL?
+    "Jobsnum_2012") #NUMBER OF DIFFERENT JOBS EVER REPORTED AS OF INTERVIEW DATE
+
+```
+
+### Data summary 
+
+Is there a significant difference in income between men and women? 
+
+To address this problem we will use the NLSY79 (National Longitudinal Survey of Youth, 1979 cohort) data set. The NLSY79 data set contains survey responses on thousands of individuals who have been surveyed every one or two years starting in 1979.
+
+In 2012 survey, there were a total of 5385 people who did not responded to the interview question, as a result we are eliminating them from the dataset as we do not have information on them.
+```{r}
+# Omit missing values(Non-interview) from dataset as we have no information on them in 2012
+nlsy$education_level[nlsy$education_level == -5] <- NA
+nlsy <- na.omit(nlsy)
+```
+
+
+
+Since income is the depentend variable, we can not have missing income values in the data. Also, we can not impute values in income as it is the variable we are trying to predict. Therefore, we omit missing values from our dataset.
+```{r}
+#Omit missing values from income(dependent variable). Since it is the variable that we are trying to predict, we can not impute values into it. Therefore we are omitting missing values.
+nlsy$income[nlsy$income == -4] <- NA
+nlsy$income[nlsy$income == -3] <- NA
+nlsy$income[nlsy$income == -2] <- NA
+nlsy$income[nlsy$income == -1] <- NA
+nlsy <- na.omit(nlsy)
+```
+
+
+
+We have defined a function to distriture missing values to other non-missing factor levels because we do not want to get rid of the entire row which might contain other useful information.
+```{r}
+#source: http://www.stat.columbia.edu/~gelman/arm/missing.pdf
+random.imp <- function (a){
+missing <- is.na(a)
+n.missing <- sum(missing)
+a.obs <- a[!missing]
+imputed <- a
+imputed[missing] <- sample (a.obs, n.missing, replace=TRUE)
+return (imputed)
+}
+```
+
+We have recorded industry_2012 variable according to the given categories of industies and businesses. We have made the missing values as a separate factor level within the variable.We have distributed the uncodeable values and Not in Labor Force vales(as it was only 1) across the rest of the factor levels.
+```{r}
+#recoding industry_2012 variable into given categories
+
+nlsy$industry_2012[nlsy$industry_2012==-4] <- 0
+
+nlsy$industry_2012[nlsy$industry_2012 == 170|nlsy$industry_2012==180|nlsy$industry_2012==190|nlsy$industry_2012==270|nlsy$industry_2012==280|nlsy$industry_2012==290] <- 1
+
+nlsy$industry_2012[nlsy$industry_2012 ==370|nlsy$industry_2012 == 380|nlsy$industry_2012==390|nlsy$industry_2012==470|nlsy$industry_2012==490] <- 2
+
+nlsy$industry_2012[nlsy$industry_2012 ==570|nlsy$industry_2012 == 580|nlsy$industry_2012==590|nlsy$industry_2012==670|nlsy$industry_2012==680|nlsy$industry_2012==690] <- 3
+
+nlsy$industry_2012[nlsy$industry_2012==770] <- 4
+
+nlsy$industry_2012[nlsy$industry_2012==1070|nlsy$industry_2012==1080|nlsy$industry_2012==1090|nlsy$industry_2012==1170|nlsy$industry_2012==1180|nlsy$industry_2012==1190|nlsy$industry_2012==1270|nlsy$industry_2012==1280|nlsy$industry_2012==1290|nlsy$industry_2012==1370|nlsy$industry_2012==1470|nlsy$industry_2012==1480|nlsy$industry_2012==1490|nlsy$industry_2012==1570|nlsy$industry_2012==1590|nlsy$industry_2012==1670|nlsy$industry_2012==1680|nlsy$industry_2012==1690|nlsy$industry_2012==1870|nlsy$industry_2012==1880|nlsy$industry_2012==1890|nlsy$industry_2012==1990|nlsy$industry_2012==2070|nlsy$industry_2012==2170|nlsy$industry_2012==2180|nlsy$industry_2012==2190|nlsy$industry_2012==2270|nlsy$industry_2012==2280|nlsy$industry_2012==2290|nlsy$industry_2012==2370|nlsy$industry_2012==2380|nlsy$industry_2012==2390|nlsy$industry_2012==2480|nlsy$industry_2012==2490|nlsy$industry_2012==2570|nlsy$industry_2012==2590|nlsy$industry_2012==2670|nlsy$industry_2012==2680|nlsy$industry_2012==2690|nlsy$industry_2012==2770|nlsy$industry_2012==2780|nlsy$industry_2012==2790|nlsy$industry_2012==2870|nlsy$industry_2012==2880|nlsy$industry_2012==2890|nlsy$industry_2012==2970|nlsy$industry_2012==2980|nlsy$industry_2012==2990|nlsy$industry_2012==3070|nlsy$industry_2012==3080|nlsy$industry_2012==3090|nlsy$industry_2012==3170|nlsy$industry_2012==3180|nlsy$industry_2012==3190|nlsy$industry_2012==3290|nlsy$industry_2012==3360|nlsy$industry_2012==3370|nlsy$industry_2012==3380|nlsy$industry_2012==3390|nlsy$industry_2012==3470|nlsy$industry_2012==3490|nlsy$industry_2012==3570|nlsy$industry_2012==3580|nlsy$industry_2012==3590|nlsy$industry_2012==3670|nlsy$industry_2012==3680|nlsy$industry_2012==3690|nlsy$industry_2012==3770|nlsy$industry_2012==3790|nlsy$industry_2012==3870|nlsy$industry_2012==3890|nlsy$industry_2012==3960|nlsy$industry_2012==3970|nlsy$industry_2012==3980|nlsy$industry_2012==3990] <- 5
+
+nlsy$industry_2012[nlsy$industry_2012==4070|nlsy$industry_2012==4080|nlsy$industry_2012==4090|nlsy$industry_2012==4170|nlsy$industry_2012==4190|nlsy$industry_2012==4260|nlsy$industry_2012==4270|nlsy$industry_2012==4280|nlsy$industry_2012==4290|nlsy$industry_2012==4370|nlsy$industry_2012==4380|nlsy$industry_2012==4390|nlsy$industry_2012==4470|nlsy$industry_2012==4480|nlsy$industry_2012==4490|nlsy$industry_2012==4560|nlsy$industry_2012==4570|nlsy$industry_2012==4580|nlsy$industry_2012==4585|nlsy$industry_2012==4590] <- 6
+
+nlsy$industry_2012[nlsy$industry_2012==4670|nlsy$industry_2012==4680|nlsy$industry_2012==4690|nlsy$industry_2012==4770|nlsy$industry_2012==4780|nlsy$industry_2012==4790|nlsy$industry_2012==4870|nlsy$industry_2012==4880|nlsy$industry_2012==4890|nlsy$industry_2012==4970|nlsy$industry_2012==4980|nlsy$industry_2012==4990|nlsy$industry_2012==5070|nlsy$industry_2012==5080|nlsy$industry_2012==5090|nlsy$industry_2012==5170|nlsy$industry_2012==5180|nlsy$industry_2012==5190|nlsy$industry_2012==5270|nlsy$industry_2012==5280|nlsy$industry_2012==5290|nlsy$industry_2012==5370|nlsy$industry_2012==5380|nlsy$industry_2012==5390|nlsy$industry_2012==5470|nlsy$industry_2012==5480|nlsy$industry_2012==5490|nlsy$industry_2012==5570|nlsy$industry_2012==5580|nlsy$industry_2012==5590|nlsy$industry_2012==5592|nlsy$industry_2012==5670|nlsy$industry_2012==5680|nlsy$industry_2012==5690] <- 7
+
+nlsy$industry_2012[nlsy$industry_2012==6070|nlsy$industry_2012==6080|nlsy$industry_2012==6090|nlsy$industry_2012==6170|nlsy$industry_2012==6180|nlsy$industry_2012==6190|nlsy$industry_2012==6270|nlsy$industry_2012==6280|nlsy$industry_2012==6290|nlsy$industry_2012==6370|nlsy$industry_2012==6380|nlsy$industry_2012==6390] <- 8
+
+nlsy$industry_2012[nlsy$industry_2012==6470|nlsy$industry_2012==6480|nlsy$industry_2012==6490|nlsy$industry_2012==6570|nlsy$industry_2012==6670|nlsy$industry_2012==6680|nlsy$industry_2012==6690|nlsy$industry_2012==6695|nlsy$industry_2012==6770|nlsy$industry_2012==6780] <- 9
+
+nlsy$industry_2012[nlsy$industry_2012==6870|nlsy$industry_2012==6880|nlsy$industry_2012==6890|nlsy$industry_2012==6970|nlsy$industry_2012==6990] <- 10
+
+nlsy$industry_2012[nlsy$industry_2012==7070|nlsy$industry_2012==7080|nlsy$industry_2012==7170|nlsy$industry_2012==7180|nlsy$industry_2012==7190] <- 11
+
+nlsy$industry_2012[nlsy$industry_2012==7270|nlsy$industry_2012==7280|nlsy$industry_2012==7290|nlsy$industry_2012==7370|nlsy$industry_2012==7380|nlsy$industry_2012==7390|nlsy$industry_2012==7460|nlsy$industry_2012==7470|nlsy$industry_2012==7480|nlsy$industry_2012==7490] <- 12
+
+nlsy$industry_2012[nlsy$industry_2012==7570|nlsy$industry_2012==7580|nlsy$industry_2012==7590|nlsy$industry_2012==7670|nlsy$industry_2012==7680|nlsy$industry_2012==7690|nlsy$industry_2012==7770|nlsy$industry_2012==7780|nlsy$industry_2012==7790] <- 13
+
+nlsy$industry_2012[nlsy$industry_2012==7860|nlsy$industry_2012==7870|nlsy$industry_2012==7880|nlsy$industry_2012==7890] <- 14
+
+nlsy$industry_2012[nlsy$industry_2012==7970|nlsy$industry_2012==7980|nlsy$industry_2012==7990|nlsy$industry_2012==8070|nlsy$industry_2012==8080|nlsy$industry_2012==8090|nlsy$industry_2012==8170|nlsy$industry_2012==8180|nlsy$industry_2012==8190|nlsy$industry_2012==8270|nlsy$industry_2012==8290|nlsy$industry_2012==8370|nlsy$industry_2012==8380|nlsy$industry_2012==8390|nlsy$industry_2012==8470] <- 15
+
+nlsy$industry_2012[nlsy$industry_2012==8560|nlsy$industry_2012==8570|nlsy$industry_2012==8580|nlsy$industry_2012==8590] <- 16
+
+nlsy$industry_2012[nlsy$industry_2012==8660|nlsy$industry_2012==8670|nlsy$industry_2012==8680|nlsy$industry_2012==8690] <- 17
+
+nlsy$industry_2012[nlsy$industry_2012==8770|nlsy$industry_2012==8780|nlsy$industry_2012==8790|nlsy$industry_2012==8870|nlsy$industry_2012==8880|nlsy$industry_2012==8970|nlsy$industry_2012==8980|nlsy$industry_2012==8990|nlsy$industry_2012==9070|nlsy$industry_2012==9080|nlsy$industry_2012==9090|nlsy$industry_2012==9160|nlsy$industry_2012==9170|nlsy$industry_2012==9180|nlsy$industry_2012==9190|nlsy$industry_2012==9290] <- 18
+
+nlsy$industry_2012[nlsy$industry_2012==9370|nlsy$industry_2012==9380|nlsy$industry_2012==9390|nlsy$industry_2012==9470|nlsy$industry_2012==9480|nlsy$industry_2012==9490|nlsy$industry_2012==9570|nlsy$industry_2012==9590|nlsy$industry_2012==9680|nlsy$industry_2012==9690|nlsy$industry_2012==9870] <- 19
+
+nlsy$industry_2012[nlsy$industry_2012==9890] <- 20
+#Distributing Uncodeable AND not in labor force values in industry_2012
+
+nlsy$industry_2012[nlsy$industry_2012==9950] <- NA
+
+nlsy$industry_2012[nlsy$industry_2012==9990] <- NA
+
+nlsy$industry_2012 <- random.imp(nlsy$industry_2012)
+#Data is clean
+```
+
+
+
+There were some "Don't Know" and "Invalid Skip" values in Gender_roles variable that we have distributed across rest of the factor levels randomly.
+```{r}
+# Filling negative values in gender_roles
+nlsy$gender_roles[nlsy$gender_roles == -2] <- NA
+nlsy$gender_roles[nlsy$gender_roles == -3] <- NA
+nlsy$gender_roles <- random.imp(nlsy$gender_roles)
+#Data is clean
+```
+
+Similarly, there were 60 valid skips and 150 values for unknown in current_residence variable. We distributed randomly into rural and urban categories.
+```{r}
+# Filling negative values in current_residence
+nlsy$current_residence[nlsy$current_residence == -4] <- NA
+nlsy$current_residence[nlsy$current_residence == 2] <- NA
+nlsy$current_residence <- random.imp(nlsy$current_residence)
+#Data is clean
+```
+
+Variables such as FAMSIZE_2012, Jobsnum_2012, education_level, race and gender were already clean.
+
+
+```{r}
+# Transform and relabel gender, race, gender_roles, current_residence and industry_2012 variables
+nlsy <- mutate(nlsy, 
+               gender = recode_factor(gender, 
+                                      `2` = "Female",
+                                      `1` = "Male"),
+               race = recode_factor(race,
+                                    `2` = "Black",
+                                    `1` = "Hispanic",
+                                    `3` = "Other"),
+               gender_roles = recode_factor(gender_roles,
+                                            `1` = "STRONGLY DISAGREE",
+                                            `2` = "DISAGREE",
+                                            `3` = "AGREE",
+                                            `4` = "STRONGLY AGREE"),
+               current_residence = recode_factor(current_residence,
+                                                 `0` = "RURAL",
+                                                 `1` = "URBAN"),
+               industry_2012 = recode_factor(industry_2012,
+                                             `1` = "Agricultural and Forestry",
+                                             `2` = "Mining",
+                                             `3` = "Utilities",
+                                             `4` = "Construction",
+                                             `5` = "Manufacturing",
+                                             `6` = "Wholesale Trade",
+                                             `7` = "Retail Trade",
+                                             `8` = "Transportation",
+                                             `9` = "Information",
+                                             `10` = "Finance & Insurance",
+                                             `11` = "Real Estate",
+                                             `12` = "Technical Services",
+                                             `13` = "Management Services",
+                                             `14` = "Educational Services",
+                                             `15` = "Health Care",
+                                             `16` = "Arts & Entertainment",
+                                             `17` = "Accomodations & Food",
+                                             `18` = "Other Services",
+                                             `19` = "Public Administration",
+                                             `20` = "Armed Forces",
+                                             `0` = "Missing"))
+```
+
+
+Total number of observations and variables in the dataset
+```{r}
+dim(nlsy)
+```
+
+Income and Gender
+
+Creating a boxplot showing how income varies between gender
+
+```{r, fig.align='center', fig.width = 5, fig.height = 4}
+qplot(x = gender, y = income, data = nlsy,
+      geom = "boxplot",
+      xlab = "Gender", 
+      ylab = "Income",
+      fill = I("lightblue"))
+```
+
+This plot suggests that being female is associated with lower income.
+
+How can we assess whether this difference is statistically significant?
+
+Let’s compute a summary table
+
+```{r}
+kable(nlsy %>%
+  group_by(gender) %>%
+  summarize(mean.income = round(mean(income), 0),
+            sd.income = round(sd(income), 0)))
+```
+
+```{r}
+kable(nlsy %>%
+  group_by(gender) %>%
+  summarize(num.obs = n(),
+            mean.income = round(mean(income), 0),
+            sd.income = round(sd(income), 0),
+            se.income = round(sd(income) / sqrt(num.obs), 0)))
+```
+
+This table shows that males, on average, earn more than females.
+
+
+t-test via t.test()
+```{r}
+incomegender.t.test <- t.test(income ~ gender, data = nlsy)
+incomegender.t.test
+```
+We see from this output that the difference in income is highly significant for males and females.
+
+Calculate difference in means between males and females
+
+```{r}
+incomegender.t.test$estimate
+```
+
+```{r}
+income.gender.diff <- round(incomegender.t.test$estimate[2] - incomegender.t.test$estimate[1], 1)
+
+# Confidence level as a %
+conf.level <- attr(incomegender.t.test, "conf.level") * 100
+```
+
+Our study finds that income is on average `r income.gender.diff`g higher in the male group compared to the female group (t-statistic `r round(incomegender.t.test$statistic,2)`, p=`r round(incomegender.t.test$p.value, 3)`, `r conf.level`% CI [`r round(incomegender.t.test$conf.int,1)`]g)
+
+
+However, this does not give a wholesome picture of the differences in income between gender.Therefore, we would explore other variables that might explain some of the difference in income.
+
+Difference in average income between men and women for each race category.
+
+```{r}
+kable(nlsy %>%
+  group_by(race) %>%
+  summarize(mean.income = round(mean(income), 0), 
+            se.income = round(sd(income) / sqrt(n()), 0)))
+
+```
+
+```{r}
+summary(aov(income ~ race, data = nlsy))
+```
+The p-value is significant at the 0.05 level, so the data suggests that there is an association between income and race.
+
+
+
+```{r}
+kable(nlsy %>%
+  group_by(race) %>%
+  summarize(income.gap = round(mean(income[gender == "Male"], na.rm = TRUE),0) -
+              round(mean(income[gender == "Female"], na.rm = TRUE),0)))
+```
+
+```{r}
+gap.data <- nlsy %>%
+  group_by(race) %>%
+  summarize(income.gap = mean(income[gender == "Male"], na.rm = TRUE) -
+              mean(income[gender == "Female"], na.rm = TRUE))
+
+ggplot(data = gap.data, aes(x = race, y = income.gap, fill = race)) +
+  geom_bar(stat = "identity") +
+  xlab("Race") + 
+  ylab("Income gap($)") +
+  ggtitle("Income gap between men and women, by race") + 
+  guides(fill = FALSE)
+```
+
+```{r}
+# Reorder race factor levels according to -income.gap
+# this is the same as reordering in *descending* order of
+# income gap
+gap.data <- mutate(gap.data,
+                   race = reorder(race, -income.gap))
+
+# Same plotting command as before
+ggplot(data = gap.data, aes(x = race, y = income.gap, fill = race)) +
+  geom_bar(stat = "identity") +
+  xlab("Race") + 
+  ylab("Income gap($)") +
+  ggtitle("Income gap between men and women, by race") + 
+  guides(fill = FALSE)
+```
+
+
+
+```{r}
+ggplot(data = gap.data, aes(x = race, y = income.gap)) +
+  geom_bar(stat = "identity", fill = I('#548696')) +
+  xlab("Race") + 
+  ylab("Income gap($)") +
+  ggtitle("Income gap between men and women, by race") + 
+  guides(fill = FALSE)
+```
+
+
+```{r}
+# Calculate income gaps (male - female) and 95% confidence intervals
+# for the gap
+gap.data.conf <- nlsy %>%
+  group_by(race) %>%
+  summarize(income.gap = mean(income[gender == "Male"], na.rm = TRUE) -
+              mean(income[gender == "Female"], na.rm = TRUE),
+            upper = -t.test(income ~ gender)$conf.int[1],
+                       lower = -t.test(income ~ gender)$conf.int[2],
+                       is.significant = as.numeric(t.test(income ~ gender)$p.value < 0.05))
+
+# Re-order the race factor according to gap size
+gap.data.conf <- mutate(gap.data.conf,
+                        race = reorder(race, -income.gap))
+
+kable(gap.data.conf)
+
+# Plot, with error bars
+ggplot(data = gap.data.conf, aes(x = race, y = income.gap,
+                            fill = is.significant)) +
+  geom_bar(stat = "identity") +
+  xlab("Race") + 
+  ylab("Income gap($)") +
+  ggtitle("Income gap between men and women, by race") + 
+  guides(fill = FALSE) +
+  geom_errorbar(aes(ymax = upper, ymin = lower), width = 0.1, size = 1) +
+  theme(text = element_text(size=12)) 
+```
+
+This plot shows that the income difference between males and females in each of the races is statistically significant from zero. Also,  the difference in income among gender in different races is statistically significant from each other. For instance, the income gap among gender in Hispanic is higher than in black and this difference is statistically significant.
+
+Check the difference in average income between men and women for rural-urban location.
+
+```{r}
+kable(nlsy %>%
+  group_by(current_residence) %>%
+  summarize(mean.bwt = round(mean(income), 0), 
+            se.bwt = round(sd(income) / sqrt(n()), 0)))
+
+```
+
+```{r}
+summary(aov(income ~ current_residence, data = nlsy))
+```
+The p-value is significant at the 0.001 level, so the data suggests that there is an association between income and current_residence.
+
+
+```{r}
+kable(nlsy %>%
+  group_by(current_residence) %>%
+  summarize(income.gap = round(mean(income[gender == "Male"], na.rm = TRUE),0) -
+              round(mean(income[gender == "Female"], na.rm = TRUE),0)))
+```
+
+
+
+```{r}
+gap.data <- nlsy %>%
+  group_by(current_residence) %>%
+  summarize(income.gap = mean(income[gender == "Male"], na.rm = TRUE) -
+              mean(income[gender == "Female"], na.rm = TRUE))
+
+ggplot(data = gap.data, aes(x = current_residence, y = income.gap, fill = current_residence)) +
+  geom_bar(stat = "identity") +
+  xlab("current_residence") + 
+  ylab("Income gap($)") +
+  ggtitle("Income gap between men and women, by current_residence") + 
+  guides(fill = FALSE)
+```
+
+```{r}
+# Reorder current_residence factor levels according to -income.gap
+gap.data <- mutate(gap.data,
+                   current_residence = reorder(current_residence, -income.gap))
+
+# Same plotting command as before
+ggplot(data = gap.data, aes(x = current_residence, y = income.gap)) +
+  geom_bar(stat = "identity", fill = I('#548696')) +
+  xlab("current_residence") + 
+  ylab("Income gap($)") +
+  ggtitle("Income gap between men and women, by current_residence") + 
+  guides(fill = FALSE)
+```
+
+
+
+```{r}
+# Calculate income gaps (male - female) and 95% confidence intervals
+# for the gap
+gap.data.conf1 <- nlsy %>%
+  group_by(current_residence) %>%
+  summarize(income.gap = mean(income[gender == "Male"], na.rm = TRUE) -
+              mean(income[gender == "Female"], na.rm = TRUE),
+            upper = -t.test(income ~ gender)$conf.int[1],
+                       lower = -t.test(income ~ gender)$conf.int[2],
+                       is.significant = as.numeric(t.test(income ~ gender)$p.value < 0.05))
+
+# Re-order the current_residence factor according to gap size
+gap.data.conf1 <- mutate(gap.data.conf1,
+                        current_residence = reorder(current_residence, -income.gap))
+kable(gap.data.conf1)
+# Plot, with error bars
+ggplot(data = gap.data.conf1, aes(x = current_residence, y = income.gap,
+                            fill = is.significant)) +
+  geom_bar(stat = "identity") +
+  xlab("current_residence") + 
+  ylab("Income gap($)") +
+  ggtitle("Income gap between men and women, by current_residence") + 
+  guides(fill = FALSE) +
+  geom_errorbar(aes(ymax = upper, ymin = lower), width = 0.1, size = 1) +
+  theme(text = element_text(size=12)) 
+```
+
+This plot shows that the income difference between males and females in rural and urban is statistically significant from zero. However, the difference in income among gender in urban is not statistically significant than in rural because the error bars overlap with each other.
+
+Relation between years of education and income
+
+```{r, fig.align='center', fig.height=4, fig.width=5}
+qplot(education_level, income, data = nlsy,
+      color = gender,
+      xlab = "Years of education", 
+      ylab = "Income")
+```
+
+This plot shows that people with higher years of education are more likely to have higher income.
+
+Relation between number of jobs and income
+```{r, fig.align='center', fig.height=4, fig.width=5}
+qplot(Jobsnum_2012, income, data = nlsy,
+      color = gender,
+      xlab = "Number of jobs", 
+      ylab = "Income",)
+```
+This plot shows that people who have had more number of jobs tend to have lower income.
+
+Current_residence(Rural-Urban)
+```{r}
+genderby.location <- with(nlsy, table(gender, current_residence))
+kable(genderby.location)
+```
+
+```{r}
+genderby.location.test <- fisher.test(genderby.location)
+genderby.location.test
+```
+
+We produced this test to reveal any intereting trends but it din not.
+An odds ratio of 1 means that  being a female or a male does not affect the odds of belonging to rural or urban.
+
+Gender roles and Family attitudes
+
+```{r}
+genderby.familyattitude <- with(nlsy, table(gender_roles, gender))
+kable(genderby.familyattitude)
+```
+
+Taking extreme attitudes
+```{r}
+genderattitudes <- genderby.familyattitude[c(1,4),]
+kable(genderattitudes)
+```
+
+```{r}
+genderattitudes.test <- fisher.test(genderattitudes)
+genderattitudes.test
+```
+This test show that the odds of disagreeing with traditional gender roles are 5.1 times greater when the gender is female than when the gender is male.
+
+
+
+```{r}
+kable(nlsy %>%
+  group_by(gender_roles,gender) %>%
+  summarize(mean.income = round(mean(income), 0), 
+            se.income = round(sd(income) / sqrt(n()), 0)))
+
+```
+People who strongly disagree with traditional gender roles tend to earn more than people who don't.
+
+
+```{r}
+summary(aov(income ~ gender_roles, data = nlsy))
+```
+The p-value is significant at the 0.01 level, so the data suggests that there is an association between income and gender_roles.
+
+```{r}
+kable(nlsy %>%
+  group_by(gender_roles) %>%
+  summarize(income.gap = round(mean(income[gender == "Male"], na.rm = TRUE),0) -
+              round(mean(income[gender == "Female"], na.rm = TRUE),0)))
+```
+It was expected that people who strong agree with gender roles would have higher income gap between gender. However, people who strongly disagree with traditional gender roles tend have more income gap between males and females.
+
+```{r}
+gap.data <- nlsy %>%
+  group_by(gender_roles) %>%
+  summarize(income.gap = mean(income[gender == "Male"], na.rm = TRUE) -
+              mean(income[gender == "Female"], na.rm = TRUE))
+
+ggplot(data = gap.data, aes(x = gender_roles, y = income.gap, fill = gender_roles)) +
+  geom_bar(stat = "identity") +
+  xlab("Believe in Gender Roles") + 
+  ylab("Income gap($)") +
+  ggtitle("Income gap between men and women, by Gender Roles") + 
+  guides(fill = FALSE)
+```
+
+```{r}
+# Reorder current_residence factor levels according to -income.gap
+gap.data <- mutate(gap.data,
+                   gender_roles = reorder(gender_roles, -income.gap))
+
+# Same plotting command as before
+ggplot(data = gap.data, aes(x = gender_roles, y = income.gap)) +
+  geom_bar(stat = "identity", fill = I('#548696')) +
+  xlab("Believe in Gender Roles") + 
+  ylab("Income gap($)") +
+  ggtitle("Income gap between men and women, by Gender Roles") + 
+  guides(fill = FALSE)
+```
+
+```{r}
+# Calculate income gaps (male - female) and 95% confidence intervals
+# for the gap
+gap.data.conf <- nlsy %>%
+  group_by(gender_roles) %>%
+  summarize(income.gap = mean(income[gender == "Male"], na.rm = TRUE) -
+              mean(income[gender == "Female"], na.rm = TRUE),
+            upper = -t.test(income ~ gender)$conf.int[1],
+                       lower = -t.test(income ~ gender)$conf.int[2],
+                       is.significant = as.numeric(t.test(income ~ gender)$p.value < 0.05))
+
+# Re-order the gender_roles factor according to gap size
+gap.data.conf <- mutate(gap.data.conf,
+                        gender_roles = reorder(gender_roles, -income.gap))
+
+kable(gap.data.conf)
+
+# Plot, with error bars
+ggplot(data = gap.data.conf, aes(x = gender_roles, y = income.gap,
+                            fill = is.significant)) +
+  geom_bar(stat = "identity") +
+  xlab("Believe in Gender Roles") + 
+  ylab("Income gap($)") +
+  ggtitle("Income gap between men and women, by Gender Roles") + 
+  guides(fill = FALSE) +
+  geom_errorbar(aes(ymax = upper, ymin = lower), width = 0.1, size = 1) +
+  theme(text = element_text(size=12)) 
+```
+
+The plot shows that the difference in income is statistically significant from zero in each of the categories. The difference in income is statistically significant for people who strongly agree with gender roles when compared other categories. However, the difference in income is not statistically significant  for other categories when compared with each other.
+
+Check the difference in average income between men and women for different industries.
+
+```{r}
+kable(nlsy %>%
+  group_by(industry_2012) %>%
+  summarize(income.gap = mean(income[gender == "Male"], na.rm = TRUE) -
+              mean(income[gender == "Female"], na.rm = TRUE)))
+```
+
+
+```{r, fig.width = 5}
+gap.data <- nlsy %>%
+  group_by(industry_2012) %>%
+  summarize(income.gap = mean(income[gender == "Male"], na.rm = TRUE) -
+              mean(income[gender == "Female"], na.rm = TRUE))
+
+ggplot(data = gap.data, aes(x = industry_2012, y = income.gap, fill = industry_2012)) +
+  geom_bar(stat = "identity") +
+  xlab("Industry") + 
+  ylab("Income gap($)") +
+  ggtitle("Income gap between men and women, by industry") + 
+  guides(fill = FALSE)+
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust = 1))
+```
+
+```{r, fig.width = 5}
+# Reorder industry factor levels according to -income.gap
+# this is the same as reordering in *descending* order of
+# income gap
+gap.data <- mutate(gap.data,
+                   industry_2012 = reorder(industry_2012, -income.gap))
+
+# Same plotting command as before
+ggplot(data = gap.data, aes(x = industry_2012, y = income.gap)) +
+  geom_bar(stat = "identity", fill = I('#548696')) +
+  xlab("Industry") + 
+  ylab("Income gap($)") +
+  ggtitle("Income gap between men and women, by Industry") + 
+  guides(fill = FALSE)+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0, hjust = 1))
+```
+
+
+```{r, fig.width = 5}
+# Calculate income gaps (male - female) and 95% confidence intervals
+# for the gap
+gap.data.conf <- nlsy %>%
+  group_by(industry_2012) %>%
+  summarize(income.gap = mean(income[gender == "Male"], na.rm = TRUE) -
+              mean(income[gender == "Female"], na.rm = TRUE),
+            lower = -t.test(income ~ gender)$conf.int[2],
+                       upper = -t.test(income ~ gender)$conf.int[1],
+                       is.significant = as.numeric(t.test(income ~ gender)$p.value < 0.05))
+
+# Re-order the race factor according to gap size
+gap.data.conf <- mutate(gap.data.conf,
+                        industry_2012 = reorder(industry_2012, -income.gap))
+
+kable(gap.data.conf)
+#Plot, with error bars
+ ggplot(data = gap.data.conf, aes(x = industry_2012, y = income.gap,
+                            fill = is.significant)) +
+  geom_bar(stat = "identity") +
+  xlab("Industry") + 
+  ylab("Income gap($)") +
+  ggtitle("Income gap between men and women, by industry") + 
+  guides(fill = FALSE) +
+  geom_errorbar(aes(ymax = upper, ymin = lower), width = 0.3, size = 1) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0, hjust = 1))
+```
+
+This plot shows that the difference in income between males and females is statistacally significant from zero for many of the industies. However, where error bars are below zero,the difference in income between males and females is not statistacally significant from zero. 
+Also the difference in income between males and females is not statistacally significant when compared from one industry with another.
+
+
+As a result of our analysis, we have decided to include race, current_residence, FAMSIZE_2012, Jobsnum_2012, education_levels, industry_2012 and gender_roles into our final model.
+
+
+Regression
+
+Checking each individual variable one by one for our regression model
+```{r}
+# Run regression
+nlsy.lm1 <- lm(income ~ gender +education_level, data = nlsy)
+
+# Output summary
+summary(nlsy.lm1)
+```
+
+```{r}
+#assessing whether education_level is a statistically significant predictor of income
+anova(update(nlsy.lm1, . ~ . - education_level), nlsy.lm1)
+```
+Education_level turns out to be a highly statistically signficant predictor of income in the model.
+
+```{r}
+# Run regression
+nlsy.lm2 <- lm(income ~ gender +education_level+ industry_2012, data = nlsy)
+
+# Output summary
+summary(nlsy.lm2)
+```
+
+```{r}
+#assessing whether industry_2012 is a statistically significant predictor of income
+anova(update(nlsy.lm2, . ~ . - industry_2012), nlsy.lm2)
+```
+Industry_2012 turns out to be a highly statistically signficant predictor of income in the model
+
+```{r}
+# Run regression
+nlsy.lm3 <- lm(income ~ gender +education_level+ industry_2012 +race, data = nlsy)
+
+# Output summary
+summary(nlsy.lm3)
+```
+
+```{r}
+#assessing whether race is a statistically significant predictor of income
+anova(update(nlsy.lm3, . ~ . - race), nlsy.lm3)
+```
+Race turns out to be a highly statistically signficant predictor of income in the model
+
+
+```{r}
+# Run regression
+nlsy.lm4 <- lm(income ~ gender+race +education_level+ industry_2012+ current_residence, data = nlsy)
+
+# Output summary
+summary(nlsy.lm4)
+```
+
+```{r}
+#assessing whether current_residence is a statistically significant predictor of income
+anova(update(nlsy.lm4, . ~ . - current_residence), nlsy.lm4)
+```
+Current_residence turns out to be a highly statistically signficant predictor of income in the model
+
+```{r}
+# Run regression
+nlsy.lm5 <- lm(income ~ gender+race +education_level+ industry_2012+ current_residence + FAMSIZE_2012, data = nlsy)
+
+# Output summary
+summary(nlsy.lm5)
+```
+
+```{r}
+#assessing whether current_residence is a statistically significant predictor of income
+anova(update(nlsy.lm5, . ~ . - FAMSIZE_2012), nlsy.lm5)
+```
+Family size turns out to be a highly statistically signficant predictor of income in the model
+
+
+```{r}
+# Run regression
+nlsy.lm6 <- lm(income ~ gender+race +education_level+ industry_2012+ current_residence + FAMSIZE_2012+ gender_roles, data = nlsy)
+
+# Output summary
+summary(nlsy.lm6)
+```
+
+```{r}
+#assessing whether gender_roles is a statistically significant predictor of income
+anova(update(nlsy.lm6, . ~ . - gender_roles), nlsy.lm6)
+```
+Gender_roles is not a statistically signficant predictor of income in the model
+
+```{r}
+# Run regression
+nlsy.lm7 <- lm(income ~ gender+race +education_level+ industry_2012+ current_residence + FAMSIZE_2012+ gender_roles+ Jobsnum_2012, data = nlsy)
+
+# Output summary
+summary(nlsy.lm7)
+```
+
+```{r}
+#assessing whether gender_roles is a statistically significant predictor of income
+anova(update(nlsy.lm7, . ~ . - JOBSNUM_2012), nlsy.lm7)
+```
+JOBSNUM_2012 turns out to be a highly statistically signficant predictor of income in the model
+
+As a result, we are eleminating gender_roles from our model as it does not explain the varibility in income well.
+
+Final regression model
+
+```{r}
+# Run regression
+nlsy.lmfinal <- lm(income ~ gender+race +education_level+ industry_2012+ current_residence + FAMSIZE_2012+ Jobsnum_2012, data = nlsy)
+
+# Output summary
+summary(nlsy.lmfinal)
+```
+
+
+```{r}
+kable(summary(nlsy.lmfinal)$coef, 
+      digits = c(3, 3, 3, 4), format = 'markdown')
+```
+
+Interactions
+
+```{r}
+# Run regression
+nlsy.lm <- lm(income ~ gender + race + industry_2012, data = nlsy)
+
+# Output summary
+summary(nlsy.lm)
+```
+
+```{r}
+nlsy.lm.interact <- update(nlsy.lm, . ~ . + industry_2012*gender)
+
+summary(nlsy.lm.interact)
+```
+Income gap between males and females working in finance industry increases, on average, by $60798 with respect to males and females working in agriculture, keeping everything constant.
+Income for males working in Finance industry is $60798+24404.8 more than females working in finance industry.
+
+
+
+Testing significance of the interacton term with `anova`
+
+```{r}
+anova(nlsy.lm, nlsy.lm.interact)
+``` 
+
+This p-value turns out to be highly statistically significant. So, we have enough evidence to conclude that the interaction term (different slopes) is providing significant additional explanatory power over the simpler model.
+
+
+
+```{r}
+plot(nlsy.lmfinal)
+```
+
+Residuals vs. Fitted :There is a clear indication of non-linearity present in this plot.
+The QQ plot: The residuals appear highly non-normal.
+Scale-location plot: We see a clear increasing trend in residual variance that runs through most of the plot.
+Residuals vs Leverage: None of the points appear to be outliers.
+
+
+Omit zeros and topcoded values from income(dependent variable). So that we can appy log on income to make it look like normally distributed data
+
+```{r}
+#Omit zeros and topcoded values from income(dependent variable). So that we can appy log on income to make look like normally distributed data
+nlsy$income[nlsy$income == 0] <- NA
+nlsy$income[nlsy$income == 343830] <- NA
+nlsy <- na.omit(nlsy)
+```
+
+
+```{r}
+# Run regression
+nlsy.lmfinal1 <- lm(log(income) ~ gender+race +education_level+ industry_2012+ current_residence + FAMSIZE_2012+ Jobsnum_2012, data = nlsy)
+
+# Output summary
+summary(nlsy.lmfinal1)
+```
+
+```{r}
+plot(nlsy.lmfinal1)
+```
+Residuals vs. Fitted: The residuals have near constant variance when plotted against fitted values
+Normal QQ plot: Better than before but the residuals from the regression do notlook approximately normally distributed. It looks skewed.
+Scale-location plot: There seems like a downward trend in this plot.
+Residuals vs Leverage: There seems to be outliers in the data.
+
+
+
+Discussion
+
+The main conclusion is that the difference in income is not only due gender but also other variables such as race, industry, level of education and number of jobs. The potential limitations of this analysis are the possibility of selection bias and omitted variable bias as there may be other factors that affect the income difference between male and women that I may not have accounted for. There are potential confounders that I did not account for, such as family income and marital status. The models in this analysis are somewhat believeable. However, I do not have much confidence in my analysis because of the possibility of omitted variable bais.Also becausem after including the interaction term, most of the coeffiencts are not significant.
+
+ 
+
+
+
+
+
+
